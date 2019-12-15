@@ -1,0 +1,24 @@
+{
+  "name": "image-processor",
+  "version": "1.0.0",
+  "description": "Node.js Image Processor Demo for AWS Lambda",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/pinodex/image-processor-lambda-demo.git"
+  },
+  "author": "Raphael Marco <hello@raphaelmarco.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/pinodex/image-processor-lambda-demo/issues"
+  },
+  "homepage": "https://github.com/pinodex/image-processor-lambda-demo#readme",
+  "dependencies": {
+    "aws-sdk": "^2.590.0",
+    "dotenv": "^8.2.0",
+    "sharp": "^0.23.4"
+  }
+}
