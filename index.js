@@ -4,6 +4,10 @@ const { parse } = require('lambda-multipart-parser');
 const { Logger, LOG_INFO, LOG_ERROR } = require('./logger');
 const { processImage } = require('./processor');
 const { uploadFile } = require('./uploader');
+const { downloadFile } = require('./downloader');
+
+const SOURCE_S3 = 's3';
+const SOURCE_GATEWAY = 'gateway';
 
 /**
  * Create response object
@@ -29,6 +33,60 @@ function generateRandomId() {
 }
 
 /**
+ * Determine trigger source
+ *
+ * @param  {object} event Event object
+ * @return {string}       Trigger source
+ */
+function getTriggerSource(event) {
+  // Discriminate against S3 trigger source
+  if (typeof event.Records !== 'undefined'
+      && event.Records.length > 0
+      && event.Records[0].eventSource === 'aws:s3') {
+
+      return SOURCE_S3;
+  }
+
+  // Discriminate against API Gateway trigger source
+  if (typeof event.headers !== 'undefined'
+      && typeof event.path !== 'undefined'
+      && typeof event.httpMethod !== 'undefined') {
+
+      return SOURCE_GATEWAY;
+  }
+
+  return null;
+}
+
+/**
+ * Invoke processing of uploaded image
+ *
+ * @param  {Buffer} file File buffer
+ * @return {object}      Processed URLs
+ */
+async function invokeProcessing(imageId, file) {
+  // Get image and thumbnail from the processed output
+  const { image, thumbnail } = await processImage(file);
+
+  // Upload image to S3
+  const imageUrl = await uploadFile(`${imageId}/image.jpg`, image, 'image/jpg');
+
+  // Upload thumbnail to S3
+  const thumbnailUrl = await uploadFile(`${imageId}/thumbnail.jpg`, thumbnail, 'image/jpg');
+
+  // Return the S3 URLs to uploaded files
+  return {
+    image: {
+      url: imageUrl
+    },
+
+    thumbnail: {
+      url: thumbnailUrl
+    }
+  };
+}
+
+/**
  * Main Entrypoint
  *
  * @param  {object} event   Event object
@@ -39,40 +97,43 @@ async function main(event, context) {
   // Create logger object with request ID as log prefix
   const logger = new Logger(context.awsRequestId);
 
-  // Parse the incoming event to get the multipart form data
-  const data = await parse(event);
-
   logger.log('Receiving event');
 
-  // Get file with field name "file"
-  const imageFile = data.files.find(({ fieldname }) => fieldname === 'file');
+  // Determine trigger source to use the correct handler for the trigger
+  const triggerSource = getTriggerSource(event);
+  logger.log(`Trigger source is: ${triggerSource}`);
 
   // Generate random ID for storage
   const imageId = generateRandomId();
+  logger.log(`Generated image ID is: ${imageId}`);
 
-  logger.log(`Using generated image ID: ${imageId}`);
-  logger.log(`Processing image: ${imageId}`);
+  let imageFile = null;
 
-  // Get image and thumbnail from the processed output
-  const { image, thumbnail } = await processImage(imageFile.content);
+  switch (triggerSource) {
+    case SOURCE_GATEWAY:
+      // Parse the incoming event to get the multipart form data
+      const data = await parse(event);
 
-  logger.log(`Uploading image: ${imageId}`);
+      // Get file with field name "file"
+      imageFile = data.files.find(({ fieldname }) => fieldname === 'file').content;
 
-  // Upload image to S3
-  const imageUrl = await uploadFile(`${imageId}/image.jpg`, image, 'image/jpg');
+      break;
 
-  logger.log(`Uploading thumbnail: ${imageId}`);
+    case SOURCE_S3:
+      // Get the uploaded file from the source bucket
+      imageFile = await downloadFile(event.Records[0].s3.object.key);
 
-  // Upload thumbnail to S3
-  const thumbnailUrl = await uploadFile(`${imageId}/thumbnail.jpg`, thumbnail, 'image/jpg');
+      break;
+  }
 
-  logger.log(`Image ${imageId} upload complete`);
+  logger.log(`Processing image ${imageId}...`);
+
+  const output = await invokeProcessing(imageId, imageFile);
+
+  logger.log(`Image ${imageId} processing complete`);
 
   // Return the S3 URLs to uploaded files
-  return response({
-    imageUrl,
-    thumbnailUrl
-  });
+  return response(output);
 }
 
 module.exports = { main };

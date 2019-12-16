@@ -1,7 +1,8 @@
 require('dotenv').config();
 
 module.exports = {
-  s3Uploads: {
-    uploaderBucket: process.env.S3_UPLOADER_BUCKET
+  buckets: {
+    sourceBucket: process.env.S3_SOURCE_BUCKET,
+    sinkBucket: process.env.S3_SINK_BUCKET
   }
 };
