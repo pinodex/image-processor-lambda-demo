@@ -1,9 +1,7 @@
-const { awsKey, s3 } = require('./config');
+const { s3Uploads } = require('./config');
 const { S3 } = require('aws-sdk');
 
-const service = new S3({
-  ...awsKey
-});
+const service = new S3();
 
 /**
  * Upload image to s3
@@ -15,7 +13,7 @@ const service = new S3({
  */
 async function uploadFile(key, file, mimeType) {
   const params = {
-    Bucket: s3.uploaderBucket,
+    Bucket: s3Uploads.uploaderBucket,
     Key: key
   };
 
